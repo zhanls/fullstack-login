@@ -4,6 +4,7 @@ const session = require('koa-session')
 const cors = require('koa2-cors')
 const bodyParser = require('koa-bodyparser')
 const static = require('koa-static')
+const respDurationMiddleware = require('./koa_response_duration')
 const app = new Koa();
 //配置session的中间件
 app.use(cors({
@@ -13,6 +14,31 @@ app.keys = ['some secret'];
 app.use(static(__dirname + '/'));
 app.use(bodyParser())
 app.use(session(app));
+app.use(respDurationMiddleware);
+//
+const one = (ctx, next) => {
+  console.log('1-Start');
+  next();
+  console.log('1-End');
+}
+
+const two = (ctx, next) => {
+  console.log('2-Start');
+  next();
+  console.log('2-End');
+}
+
+const final = (ctx, next) => {
+  console.log('final-Start');
+  ctx.body = { text: 'Hello World' };
+  next();
+  console.log('final-End');
+}
+
+app.use(one);
+app.use(two);
+app.use(final);
+//
 app.use((ctx, next) => {
   if (ctx.url.indexOf('login') > -1) {
     next()
