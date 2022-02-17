@@ -11,5 +11,8 @@ export default defineNuxtConfig({
       // add Postcss options
       postcssOptions: require('./postcss.config.js'),
     }
+  },
+  privateRuntimeConfig: {
+    UPLOAD_DIR: process.env.UPLOAD_DIR
   }
 })

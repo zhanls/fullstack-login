@@ -1,33 +1,33 @@
 import type { IncomingMessage, ServerResponse } from 'http'
-// import { useBody } from 'h3'
+
+import config from '#config'
 import busboy from 'busboy'
-import fs from 'fs'
+import { createWriteStream, existsSync, mkdirSync } from 'fs'
 import path from 'path'
 import { Readable } from 'stream'
 
-const parseMultipart = (req: IncomingMessage, res: ServerResponse) => new Promise<boolean>((resolve, reject) => {
+interface fieldsType {
+  chunkhash?: string;
+  index?: string;
+}
+
+const asyncBusboy = (req: IncomingMessage) => new Promise<boolean>(resolve => {
   const bb = busboy({ headers: req.headers })
-  let filename: string;
-  bb.on('field', (name, val, info) => {
-    console.log(`Field [${name}]: value: %j`, val)
-    if (name === 'name') {
-      filename = val
+  const fields:fieldsType = {}
+  bb.on('field', (key, value) => {
+    console.log(`Field [${key}]: value: %j`, value)
+    fields[key] = value
+  }).on('file', (name, stream: Readable) => {
+    const chunkDir = path.resolve(config.UPLOAD_DIR, fields.chunkhash)
+    if (!existsSync(chunkDir)) {
+      // 没有文件夹则先创建一个
+      mkdirSync(chunkDir)
     }
-  })
-  bb.on('file', (name, stream: Readable, info) => {
-    // const { filename, encoding, mimeType } = info;
-    // console.log(
-    //   `File [${name}]: filename: %j, encoding: %j, mimeType: %j`,
-    //   filename,
-    //   encoding,
-    //   mimeType
-    // )
-    const saveTo = path.resolve(`./public/${filename}`)
+    const saveTo = path.resolve(chunkDir, fields.index)
     console.log("🚀 ~ file: uploadfile.ts ~ line 27 ~ bb.on ~ saveTo", saveTo)
     // 将文件存放到/public目录下，注意此处必须消费掉stream, 可使用stream.resume()
-    stream.pipe(fs.createWriteStream(saveTo))
-  })
-  bb.on('close', () => {
+    stream.pipe(createWriteStream(saveTo))
+  }).on('close', () => {
     console.log('Done parsing form!')
     resolve(true)
   })
@@ -35,11 +35,8 @@ const parseMultipart = (req: IncomingMessage, res: ServerResponse) => new Promis
 })
 
 export default async (req: IncomingMessage, res: ServerResponse) => {
-  // const body = await useBody(req) // only for POST request
-  // console.log("🚀 ~ file: uploadfile.ts ~ line 6 ~ body", body)
   if (req.method === 'POST') {
-    console.log('POST request')
-    const finished = await parseMultipart(req, res)
+    const finished = await asyncBusboy(req)
     if (finished) {
       res.writeHead(200, { 'Connection': 'close' })
       res.end()

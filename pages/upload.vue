@@ -72,23 +72,32 @@ const calculateHashByIdle = () => new Promise<string>((resolve, reject) => {
   // 第一次执行runTaskQueue
   taskHandle = requestIdleCallback(runTaskQueue)
 })
+
 const uploadFile = async () => {
   createFileChunk()
   hashProgress.value = 0
   const hash = await calculateHashByWorker()
   // const hash1 = await calculateHashByIdle()
   // 传给后端的数据
-  const requests = chunks.value.map((chunk, index) => {
+  const requests = chunks.value.map((chunk, i) => {
     const form = new FormData()
-    form.append('name', `${hash}-${index}`)
+    form.append('index', String(i))
+    form.append('chunkhash', hash)
     form.append('chunk', chunk.blob)
     return axios.post('/uploadfile', form, {
       onUploadProgress: progress => {
-        chunks.value[index].progress = Number(((progress.loaded / progress.total) * 100).toFixed(2))
+        chunks.value[i].progress = Number(((progress.loaded / progress.total) * 100).toFixed(2))
       }
     })
   })
-  Promise.all(requests)
+  await Promise.all(requests)
+  // 合并文件请求
+  const ext = file.value.name.split('.').pop()
+  // axios.post('/mergefile', {
+  //   ext,
+  //   chunkhash: hash,
+  //   chunksize: CHUNK_SIZE
+  // })
 }
 const onDragOver = () => {
   isDragging.value = true
@@ -128,7 +137,6 @@ const handleFileChange = (e: Event) => {
       <input
         type="file"
         name="file"
-        accept="video/*"
         class="block text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100"
         @change="handleFileChange"
       />
