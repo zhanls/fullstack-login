@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import SparkMD5 from 'spark-md5'
-// 大文件上传：先算MD5，再进行上传
-import { ref, getCurrentInstance } from 'vue'
+// 大文件上传：先算切片MD5，再分片上传切片blob及hash
+import { ref, getCurrentInstance, computed } from 'vue'
 const axios = getCurrentInstance().appContext.config.globalProperties.$axios;
 const CHUNK_SIZE = 0.5 * 1024 * 1024 // 一个chunk最多0.5MB
 interface chunk {
@@ -12,8 +12,12 @@ interface chunk {
 const file = ref<File>()
 const isDragging = ref<boolean>(false)
 const chunks = ref<Array<chunk>>([])
-const uploadProgress = ref<number>(0)
 const hashProgress = ref<number>(0)
+
+const uploadProgress = computed(() => {
+  const ret = chunks.value.reduce((acc, chunk, i) => i === chunks.value.length - 1 ? (acc + chunk.progress) / chunks.value.length : acc + chunk.progress, 0)
+  return ret
+})
 
 const createFileChunk = (size: number = CHUNK_SIZE) => {
   for (let i = 0; i < file.value.size; i += size) {
@@ -93,11 +97,11 @@ const uploadFile = async () => {
   await Promise.all(requests)
   // 合并文件请求
   const ext = file.value.name.split('.').pop()
-  // axios.post('/mergefile', {
-  //   ext,
-  //   chunkhash: hash,
-  //   chunksize: CHUNK_SIZE
-  // })
+  axios.post('/mergefile', {
+    ext,
+    chunkhash: hash,
+    size: CHUNK_SIZE
+  })
 }
 const onDragOver = () => {
   isDragging.value = true
@@ -150,8 +154,8 @@ const handleFileChange = (e: Event) => {
         <progress :value="uploadProgress" max="100"></progress>
         {{ uploadProgress }}%
       </label>
+      <button @click="uploadFile">上传</button>
     </div>
-    <button @click="uploadFile">上传</button>
     <hr class="py-8">
     <h1>双飞翼布局</h1>
     <main>

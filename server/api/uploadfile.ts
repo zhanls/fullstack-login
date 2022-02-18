@@ -38,11 +38,9 @@ export default async (req: IncomingMessage, res: ServerResponse) => {
   if (req.method === 'POST') {
     const finished = await asyncBusboy(req)
     if (finished) {
-      res.writeHead(200, { 'Connection': 'close' })
-      res.end()
+      res.writeHead(200).end('切片上传成功')
     }
     return
   }
-  res.writeHead(404)
-  res.end()
+  res.writeHead(404).end()
 }
