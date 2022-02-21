@@ -20,6 +20,7 @@ const uploadProgress = computed(() => {
 })
 
 const createFileChunk = (size: number = CHUNK_SIZE) => {
+  chunks.value = []
   for (let i = 0; i < file.value.size; i += size) {
     chunks.value.push({
       progress: 0,
@@ -80,28 +81,41 @@ const calculateHashByIdle = () => new Promise<string>((resolve, reject) => {
 const uploadFile = async () => {
   createFileChunk()
   hashProgress.value = 0
-  const hash = await calculateHashByWorker()
-  // const hash1 = await calculateHashByIdle()
-  // 传给后端的数据
-  const requests = chunks.value.map((chunk, i) => {
-    const form = new FormData()
-    form.append('index', String(i))
-    form.append('chunkhash', hash)
-    form.append('chunk', chunk.blob)
-    return axios.post('/uploadfile', form, {
-      onUploadProgress: progress => {
-        chunks.value[i].progress = Number(((progress.loaded / progress.total) * 100).toFixed(2))
-      }
-    })
-  })
-  await Promise.all(requests)
-  // 合并文件请求
+  // const hash = await calculateHashByWorker()
+  const hash = await calculateHashByIdle()
+  // 问一下后端文件是否上传过，如果上传过，是否有存在的切片
   const ext = file.value.name.split('.').pop()
-  axios.post('/mergefile', {
-    ext,
+  const { data: { uploadedList, uploaded } } = await axios.post('/checkfile', {
     chunkhash: hash,
-    size: CHUNK_SIZE
+    ext
   })
+  if (uploaded) {
+    alert('文件已存在于服务端，秒传成功！')
+  } else {
+    // 传给后端的数据
+    uploadedList.forEach(uploadedChunk => {
+      chunks.value[uploadedChunk].progress = 100
+    })
+    const requests = chunks.value.filter((chunk, i) => !uploadedList.includes(String(i))).map((chunk, i) => {
+      const form = new FormData()
+      form.append('index', String(i))
+      form.append('chunkhash', hash)
+      form.append('chunk', chunk.blob)
+      return axios.post('/uploadfile', form, {
+        onUploadProgress: progress => {
+          chunks.value[i].progress = Number(((progress.loaded / progress.total) * 100).toFixed(2))
+        }
+      })
+    })
+    await Promise.all(requests)
+    // 合并文件请求
+    await axios.post('/mergefile', {
+      ext,
+      chunkhash: hash,
+      size: CHUNK_SIZE
+    })
+    alert('成功')
+  }
 }
 const onDragOver = () => {
   isDragging.value = true
